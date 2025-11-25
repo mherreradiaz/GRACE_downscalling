@@ -1,6 +1,7 @@
 library(terra)
 library(tidyterra)
 library(tidyverse)
+library(fs)
 library(glue)
 
 data_GWL <- read_rds('data/processed/rds/GWL_chile.rds')
@@ -79,33 +80,36 @@ left_join(pozos, y = cor_mes_pozo) |>
 
 data_raw <- read_rds('data/processed/rds/downscaled_products_correlation.rds')
 
-n_umbral <- data_raw |> # filtar el 75% con más datos y r significativos p-value < 0.05
-  group_by(variable) |> 
-  reframe(n_umbral = quantile(n,.25))
+data_all <- data_raw |>
+  mutate(significance = if_else(p_value < 0.05, "Significant", "Not significant"))
 
-data <- data_raw |> 
-  left_join(n_umbral) |> 
-  filter(n > n_umbral,
-         p_value < 0.05)
-
-data_raw |> 
-  filter(n > n_umbral,
-         p_value < 0.05) |> 
-  pull(codigo) |> 
-  unique() |> 
-  length()
-
-data |>
-  ggplot(aes(x = r)) +
-  geom_histogram(binwidth = 0.2, boundary = 0, fill = 'darkcyan', color = 'black',linewidth = .2) +
-  scale_x_continuous(limits = c(-1.1,1.1), expand = c(0,0), breaks = seq(-1, 1, by = 0.2)) +
-  scale_y_continuous(expand = c(0,0), limits = c(0,135), breaks = seq(0,140,by = 20)) +
-  labs(x = 'Pearson r',y = 'n° of wells') +
+ggplot(data_all, aes(x = r, fill = significance)) +
+  geom_histogram(binwidth = 0.2, boundary = 0, color = "black", linewidth = 0.2, position = "identity") +
+  scale_fill_manual(values = c("Significant" = "darkcyan", "Not significant" = "yellow")) +
+  scale_x_continuous(breaks = c(-1, -0.6, 0, 0.6, 1), limits = c(-1.1, 1.1), expand = c(0, 0)) +
+  scale_y_continuous(breaks = seq(0, 200, by = 40), limits = c(0, 200), expand = c(0, 0)) +
+  labs(x = "Pearson r", y = "Number of wells", fill = NULL) +
   facet_wrap(~variable) +
   theme_bw() +
-  theme(strip.background = element_rect(fill='white'))
+  theme(
+    strip.background = element_rect(fill = "white"),
+    legend.position = "right"
+  )
 
 ggsave('output/fig/validation/r_histogram.png',width = 8, height = 5)
+
+data_all |> 
+  mutate(r_bin = cut(r,
+                     breaks = seq(-1, 1, by = 0.2),
+                     include.lowest = T,
+                     right = F)) |> 
+  group_by(variable,r_bin) |> 
+  reframe(n = n()) |> 
+  group_by(variable) |> 
+  mutate(perc = n/sum(n)*100) |> 
+  na.omit() |> 
+  View()
+
 
 data |>
   ggplot(aes(x = n)) +

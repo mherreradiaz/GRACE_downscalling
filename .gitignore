@@ -2,5 +2,5 @@
 .Rhistory
 .RData
 .Ruserdata
-data/processed/raster
-data/raw/raster
+data/processed/raster/downscaling_preds
+
